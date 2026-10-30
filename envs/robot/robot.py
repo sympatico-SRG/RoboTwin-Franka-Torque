@@ -523,6 +523,38 @@ class Robot:
         jointState_list.append(self.get_right_gripper_val())
         return jointState_list
 
+    def get_arm_measured_dynamics(self, arm_tag):
+        """Return measured arm q/qdot and transmitted joint torque.
+
+        A revolute PhysX joint rotates about its joint-frame X (twist) axis.
+        The incoming joint spatial force is ordered [Fx, Fy, Fz, Tx, Ty, Tz].
+        Tx is the transmitted load at that joint, *not* the externally applied
+        ``get_qf()`` and not a calibrated motor-current torque sensor.
+        """
+        if arm_tag == "left":
+            entity, arm_joints = self.left_entity, self.left_arm_joints
+        elif arm_tag == "right":
+            entity, arm_joints = self.right_entity, self.right_arm_joints
+        else:
+            raise ValueError(f"Unknown arm tag: {arm_tag}")
+
+        active_joints = entity.get_active_joints()
+        qpos = np.asarray(entity.get_qpos(), dtype=np.float32)
+        qvel = np.asarray(entity.get_qvel(), dtype=np.float32)
+        incoming = np.asarray(entity.get_link_incoming_joint_forces(), dtype=np.float32)
+        joint_indices = [active_joints.index(joint) for joint in arm_joints]
+        link_indices = [joint.get_child_link().get_index() for joint in arm_joints]
+
+        measured = {
+            "qpos": qpos[joint_indices].copy(),
+            "qvel": qvel[joint_indices].copy(),
+            "transmitted_torque": incoming[link_indices, 3].copy(),
+        }
+        if any(values.shape != (len(arm_joints),) or not np.isfinite(values).all()
+               for values in measured.values()):
+            raise ValueError(f"Invalid {arm_tag} arm dynamics observation")
+        return measured
+
     def get_left_gripper_val(self):
         if None in self.left_gripper:
             print("No gripper")

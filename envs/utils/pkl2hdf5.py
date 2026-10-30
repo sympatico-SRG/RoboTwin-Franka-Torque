@@ -115,6 +115,29 @@ def create_xpolicylab_hdf5(data, hdf5_path, instructions, frequency):
             state.create_dataset(target_name, data=values[:-1])
             action.create_dataset(target_name, data=values[1:])
 
+        measurements = data.get("joint_measurement")
+        if measurements is not None:
+            for arm in ("left", "right"):
+                arm_data = measurements[arm]
+                for source_name, target_name, unit in (
+                    ("qpos", f"{arm}_arm_measured_qpos", "rad"),
+                    ("qvel", f"{arm}_arm_measured_qvel", "rad/s"),
+                    ("transmitted_torque", f"{arm}_arm_transmitted_torque", "N m"),
+                ):
+                    values = np.asarray(arm_data[source_name], dtype=np.float32)
+                    if values.shape != (frame_num, 7) or not np.isfinite(values).all():
+                        raise ValueError(
+                            f"Expected {frame_num} finite 7-DOF samples for {target_name}; "
+                            f"got {values.shape}"
+                        )
+                    dataset = state.create_dataset(target_name, data=values[:-1])
+                    dataset.attrs["unit"] = unit
+                    if source_name == "transmitted_torque":
+                        dataset.attrs["source"] = (
+                            "SAPIEN/PhysX incoming joint spatial torque, "
+                            "joint-frame twist (X) axis; not motor current torque"
+                        )
+
         endpose = data.get("endpose", {})
         for source_name, target_name in [
             ("left_endpose", "left_ee_poses"),

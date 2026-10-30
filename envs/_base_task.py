@@ -445,6 +445,14 @@ class Base_Task(gym.Env):
             "endpose": {},
         }
 
+        # Optional physical measurements. The existing joint_action fields below
+        # are drive targets, while these q/qdot values come from the simulator.
+        if self.data_type.get("joint_torque", False):
+            pkl_dic["joint_measurement"] = {
+                arm: self.robot.get_arm_measured_dynamics(arm)
+                for arm in ("left", "right")
+            }
+
         pkl_dic["observation"] = self.cameras.get_config()
         # rgb
         if self.data_type.get("rgb", False):
